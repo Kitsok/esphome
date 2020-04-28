@@ -19,15 +19,15 @@ captive_portal:
 logger:
 
 # Enable Home Assistant API
- api:
-   password: !secret api_passwd
+api:
+  password: !secret api_passwd
 
- ota:
-   password: !secret ota_passwd
+ota:
+  password: !secret ota_passwd
 
 esp32_ble_tracker:
- scan_parameters:
-     window: 100ms
+  scan_parameters:
+    window: 100ms
 
 switch:
   - platform: gpio

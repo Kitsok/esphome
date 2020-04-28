@@ -1,0 +1,138 @@
+esphome:
+  name: esp32_dwell
+  platform: ESP32
+  board: esp32doit-devkit-v1
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esp32 Dwell Fallback Hotspot"
+
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: !secret api_passwd
+
+ota:
+  password: !secret ota_passwd
+
+i2c:
+  sda: 21
+  scl: 22
+  scan: True
+  id: bus_a
+
+web_server:
+  port: 80
+
+sensor:
+  - platform: bmp085
+    temperature:
+      name: "Outside Temperature"
+      id: outside_temp
+    pressure:
+      name: "Outside Pressure"
+    update_interval: 60s
+
+  - platform: pulse_counter
+    pin:
+      number: 19
+      mode: INPUT_PULLUP
+    name: "water counter"
+    unit_of_measurement: "L/min"
+    id: "water_flow"
+    update_interval: 10s
+    on_value:
+      then:
+        - lambda: id(global_water) += 1; id(ha_global_water).state = id(global_water);
+
+  - platform: integration
+    name: "Water quantity"
+    time_unit: min
+    sensor: water_flow
+    id: "water_quantity"
+
+  - platform: homeassistant
+    name: "Pump period"
+    entity_id: input_number.pump_period
+    id: pump_period
+
+  - platform: homeassistant
+    name: "Safe temperature to start pump"
+    entity_id: input_number.pump_mintemp
+    id: pump_mintemp
+
+  - platform: homeassistant
+    name: "Global water amount"
+    entity_id: input_number.global_water
+    id: ha_global_water
+
+binary_sensor:
+  - platform: gpio
+    pin: 
+      number: 18
+      mode: INPUT_PULLUP
+      inverted: True
+    name: motor_on
+
+switch:
+  - platform: gpio
+    pin: 33
+    id: pump_relay
+    name: "Pump relay"
+
+  - platform: gpio
+    pin: 2
+    id: led
+    name: "LED"
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+globals:
+  - id: minutes_spent
+    type: int
+    initial_value: '0'
+
+  - id: global_water
+    type: int
+    initial_value: '0'
+
+interval:
+  - interval: 1min
+    then:
+      - logger.log: 
+          format: "Check time spent. Period %d minutes_spent %d"
+          args: ['int(id(pump_period).state)', 'int(id(minutes_spent))']
+      - if:
+          condition:
+            lambda: 'return id(minutes_spent) >= id(pump_period).state;'
+          then:
+             - logger.log: "Time expired"
+             - lambda: id(minutes_spent) = 0;
+             - logger.log: "FIRE THE PUMP!"
+             - script.execute: pump_on
+          else:
+             - lambda: id(minutes_spent) += 1;
+
+script:
+   - id: pump_on
+     then:
+        - if:
+            condition:
+              lambda: 'return (id(outside_temp).state >= id(pump_mintemp).state);'
+            then:
+               - switch.turn_on: pump_relay
+               - delay: 15s
+               - switch.turn_off: pump_relay
+            else:
+               - logger.log: "Temperature is too low, not starting pump"
+

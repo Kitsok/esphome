@@ -76,6 +76,10 @@ sensor:
     entity_id: input_number.global_water
     id: ha_global_water
 
+  - platform: wifi_signal
+    name: "Dwell ESP32 RSSI"
+    update_interval: 60s
+
 binary_sensor:
   - platform: gpio
     pin: 

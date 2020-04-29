@@ -52,9 +52,6 @@ binary_sensor:
         - switch.turn_on: LED_1
         - delay: 2s
         - switch.turn_off: LED_1
-  - platform: ble_presence
-    mac_address: 7C:2F:80:EA:FA:10
-    name: "Gigaset G-tag orange"
 
 web_server:
   port: 80
@@ -70,7 +67,29 @@ i2c:
 sensor:
   - platform: bmp085
     temperature:
-      name: "Outside Temperature"
+      name: "Floor Temperature"
     pressure:
-      name: "Outside Pressure"
+      name: "Atmospheric Pressure"
     update_interval: 60s
+
+  - platform: wifi_signal
+    name: "Test ESP32 RSSI"
+    update_interval: 60s
+
+  - platform: xiaomi_lywsdcgq
+    mac_address: 58:2D:34:39:21:83
+    temperature:
+      name: "Stairs Temperature"
+    humidity:
+      name: "Stairs Humidity"
+    battery_level:
+      name: "Stairs Battery"
+
+  - platform: xiaomi_lywsdcgq
+    mac_address: 58:2D:34:39:21:A4
+    temperature:
+      name: "Bedroom Temperature"
+    humidity:
+      name: "Bedroom Humidity"
+    battery_level:
+      name: "Bedroom Battery"

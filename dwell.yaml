@@ -35,12 +35,22 @@ web_server:
   port: 80
 
 sensor:
+  - platform: uptime
+    name: Dwell uptime
+    update_interval: 5s
+
+  - platform: template
+    name: "Pump on"
+    lambda: |-
+      return id(pump_on_time) != 0;
+    update_interval: 10s
+
   - platform: bmp085
     temperature:
-      name: "Outside Temperature"
+      name: "Temperature"
       id: outside_temp
     pressure:
-      name: "Outside Pressure"
+      name: "Air Pressure"
     update_interval: 60s
 
   - platform: pulse_counter
@@ -50,16 +60,10 @@ sensor:
     name: "water counter"
     unit_of_measurement: "L/min"
     id: "water_flow"
-    update_interval: 10s
-    on_value:
-      then:
-        - lambda: id(global_water) += 1; id(ha_global_water).state = id(global_water);
-
-  - platform: integration
-    name: "Water quantity"
-    time_unit: min
-    sensor: water_flow
-    id: "water_quantity"
+    update_interval: 60s
+    count_mode:
+      rising_edge: INCREMENT
+      falling_edge: INCREMENT
 
   - platform: homeassistant
     name: "Pump period"
@@ -67,78 +71,78 @@ sensor:
     id: pump_period
 
   - platform: homeassistant
+    name: "Pump duration"
+    entity_id: input_number.pump_duration
+    id: pump_duration
+
+  - platform: homeassistant
     name: "Safe temperature to start pump"
     entity_id: input_number.pump_mintemp
     id: pump_mintemp
-
-  - platform: homeassistant
-    name: "Global water amount"
-    entity_id: input_number.global_water
-    id: ha_global_water
 
   - platform: wifi_signal
     name: "Dwell ESP32 RSSI"
     update_interval: 60s
 
-binary_sensor:
-  - platform: gpio
-    pin: 
-      number: 18
-      mode: INPUT_PULLUP
-      inverted: True
-    name: motor_on
-
 switch:
   - platform: gpio
     pin: 33
-    id: pump_relay
-    name: "Pump relay"
-
-  - platform: gpio
-    pin: 2
-    id: led
-    name: "LED"
+    id: pump_relay_out
+    internal: true
+    restore_mode: ALWAYS_OFF
 
 time:
   - platform: homeassistant
     id: homeassistant_time
 
 globals:
-  - id: minutes_spent
+  - id: time_spent
     type: int
     initial_value: '0'
 
-  - id: global_water
+  - id: pump_on_time
     type: int
     initial_value: '0'
 
 interval:
-  - interval: 1min
+  - interval: 60s
     then:
-      - logger.log: 
-          format: "Check time spent. Period %d minutes_spent %d"
-          args: ['int(id(pump_period).state)', 'int(id(minutes_spent))']
+      - logger.log:
+          format: "Check time spent. Period %d minutes spent %d motor on %d"
+          args: ['int(id(pump_period).state)', 'int(id(time_spent))', 'int(id(pump_on_time))']
       - if:
           condition:
-            lambda: 'return id(minutes_spent) >= id(pump_period).state;'
+            lambda: 'return id(time_spent) <= 0;'
           then:
-             - logger.log: "Time expired"
-             - lambda: id(minutes_spent) = 0;
-             - logger.log: "FIRE THE PUMP!"
-             - script.execute: pump_on
-          else:
-             - lambda: id(minutes_spent) += 1;
+            - logger.log:
+                format: "Setting initial state of time_spent to %d"
+                args: ['int(id(pump_period).state)']
+            - lambda: id(time_spent) = id(pump_period).state;
+      - lambda: id(time_spent) += 1;
+      - if:
+          condition:
+            lambda: 'return id(time_spent) >= id(pump_period).state;'
+          then:
+             - logger.log: "Motor on"
+             - script.execute: turn_pump_on
+             - lambda: id(pump_on_time) += 1;
+      - if:
+          condition:
+            lambda: 'return id(pump_on_time) > id(pump_duration).state;'
+          then:
+             - logger.log: "Motor off"
+             - switch.turn_off: pump_relay_out
+             - lambda: id(pump_on_time) = 0;
+             - lambda: id(time_spent) = 1;
 
 script:
-   - id: pump_on
+   - id: turn_pump_on
      then:
         - if:
             condition:
               lambda: 'return (id(outside_temp).state >= id(pump_mintemp).state);'
             then:
-               - switch.turn_on: pump_relay
-               - delay: 15s
-               - switch.turn_off: pump_relay
+               - switch.turn_on: pump_relay_out
             else:
                - logger.log: "Temperature is too low, not starting pump"
 

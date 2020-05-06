@@ -37,18 +37,26 @@ web_server:
 sensor:
   - platform: uptime
     name: Dwell uptime
-    update_interval: 5s
+    id: dwell_uptime
+    update_interval: 10s
 
   - platform: template
     name: "Pump on"
+    accuracy_decimals: 0
     lambda: |-
       return id(pump_on_time) != 0;
     update_interval: 10s
 
+  - platform: template
+    id: dwell_total_counter
+    name: "Total water"
+    unit_of_measurement: "L"
+    accuracy_decimals: 0
+
   - platform: bmp085
     temperature:
-      name: "Temperature"
-      id: outside_temp
+      name: "Dwell box temperature"
+      id: dwell_box_temp
     pressure:
       name: "Air Pressure"
     update_interval: 60s
@@ -57,13 +65,18 @@ sensor:
     pin:
       number: 19
       mode: INPUT_PULLUP
-    name: "water counter"
-    unit_of_measurement: "L/min"
     id: "water_flow"
+    internal: true
     update_interval: 60s
     count_mode:
       rising_edge: INCREMENT
       falling_edge: INCREMENT
+    filters:
+      - lambda: |-
+          static float total_pulses = 0.0;
+          total_pulses += x * 1;
+          id(dwell_total_counter).publish_state(total_pulses * 5);
+          return x;
 
   - platform: homeassistant
     name: "Pump period"
@@ -91,6 +104,10 @@ switch:
     internal: true
     restore_mode: ALWAYS_OFF
 
+  - platform: restart
+    internal: true
+    id: restart_switch
+
 time:
   - platform: homeassistant
     id: homeassistant_time
@@ -112,37 +129,47 @@ interval:
           args: ['int(id(pump_period).state)', 'int(id(time_spent))', 'int(id(pump_on_time))']
       - if:
           condition:
-            lambda: 'return id(time_spent) <= 0;'
+            lambda: 'return id(time_spent) < 0;'
           then:
             - logger.log:
                 format: "Setting initial state of time_spent to %d"
-                args: ['int(id(pump_period).state)']
-            - lambda: id(time_spent) = id(pump_period).state;
+#                args: ['int(id(pump_period).state)']
+                args: ['0']
+#            - lambda: id(time_spent) = id(pump_period).state;
+            - lambda: id(time_spent) = 0;
       - lambda: id(time_spent) += 1;
       - if:
           condition:
             lambda: 'return id(time_spent) >= id(pump_period).state;'
           then:
-             - logger.log: "Motor on"
-             - script.execute: turn_pump_on
-             - lambda: id(pump_on_time) += 1;
+             - if:
+                 condition:
+                   lambda: 'return id(pump_on_time) == 0;'
+                 then:
+                   - logger.log: "Motor on"
+                   - lambda: id(pump_on_time) += 1;
+                   - script.execute: turn_pump_on
+                 else:
+                   - lambda: id(pump_on_time) += 1;
       - if:
           condition:
             lambda: 'return id(pump_on_time) > id(pump_duration).state;'
           then:
              - logger.log: "Motor off"
+             - delay: 15s
              - switch.turn_off: pump_relay_out
-             - lambda: id(pump_on_time) = 0;
-             - lambda: id(time_spent) = 1;
+             - switch.turn_on: restart_switch
 
 script:
    - id: turn_pump_on
      then:
         - if:
             condition:
-              lambda: 'return (id(outside_temp).state >= id(pump_mintemp).state);'
+              lambda: 'return (id(dwell_box_temp).state >= id(pump_mintemp).state);'
             then:
                - switch.turn_on: pump_relay_out
             else:
                - logger.log: "Temperature is too low, not starting pump"
+               - lambda: id(pump_on_time) = 0;
+               - lambda: id(time_spent) = 1;
 

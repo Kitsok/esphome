@@ -121,6 +121,10 @@ globals:
     type: int
     initial_value: '0'
 
+  - id: last_earned
+    type: int
+    initial_value: '0'
+
 interval:
   - interval: 60s
     then:
@@ -132,12 +136,11 @@ interval:
             lambda: 'return id(time_spent) < 0;'
           then:
             - logger.log:
-                format: "Setting initial state of time_spent to %d"
-#                args: ['int(id(pump_period).state)']
-                args: ['0']
-#            - lambda: id(time_spent) = id(pump_period).state;
+                format: "Setting initial state of time_spent to 0"
             - lambda: id(time_spent) = 0;
       - lambda: id(time_spent) += 1;
+
+      # Start motor if it's time
       - if:
           condition:
             lambda: 'return id(time_spent) >= id(pump_period).state;'
@@ -151,14 +154,32 @@ interval:
                    - script.execute: turn_pump_on
                  else:
                    - lambda: id(pump_on_time) += 1;
+
+      # Dry run protection
+      - if:
+          condition:
+            lambda: 'return id(pump_on_time) > 2;'
+          then:
+             - logger.log:
+                 format: "Last earned: %d current earned: %d"
+                 args: ['int(id(dwell_total_counter).state)', 'int(id(last_earned))']
+             - if:
+                 condition:
+                    lambda: 'return (id(dwell_total_counter).state - id(last_earned) > 0);'
+                 then:
+                    - logger.log: "Positive earn, continuing pumping"
+                    - lambda: id(last_earned) = id(dwell_total_counter).state;
+                 else:
+                    - logger.log: "No result, time to stop pump"
+                    - script.execute: turn_pump_off
+
+      # Turn off motor by maximum run time
       - if:
           condition:
             lambda: 'return id(pump_on_time) > id(pump_duration).state;'
           then:
              - logger.log: "Motor off"
-             - delay: 15s
-             - switch.turn_off: pump_relay_out
-             - switch.turn_on: restart_switch
+             - script.execute: turn_pump_off
 
 script:
    - id: turn_pump_on
@@ -172,4 +193,10 @@ script:
                - logger.log: "Temperature is too low, not starting pump"
                - lambda: id(pump_on_time) = 0;
                - lambda: id(time_spent) = 1;
+
+   - id: turn_pump_off
+     then:
+        - delay: 15s
+        - switch.turn_off: pump_relay_out
+        - switch.turn_on: restart_switch
 

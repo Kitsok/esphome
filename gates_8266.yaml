@@ -25,6 +25,11 @@ api:
 ota:
   password: !secret ota_passwd
 
+globals:
+  - id: time_opening
+    type: int
+    initial_value: '0'
+
 switch:
   - platform: gpio
     pin: GPIO12
@@ -42,11 +47,18 @@ switch:
     icon: "mdi:gate"
     id: "gate_button"
     turn_on_action:
-    - switch.turn_on: rel
-    - switch.turn_on: led
-    - delay: 500ms
-    - switch.turn_off: rel
-    - switch.turn_off: led
+    - if:
+        condition:
+          lambda: 'return (id(gates_uptime).state - id(time_opening)) < 40;'
+        then:
+          - logger.log: 'Not toggling, protection interval not passed'
+        else:
+          - switch.turn_on: rel
+          - switch.turn_on: led
+          - delay: 500ms
+          - switch.turn_off: rel
+          - switch.turn_off: led
+          - lambda: id(time_opening) = id(gates_uptime).state;
 
 sensor:
   - platform: uptime

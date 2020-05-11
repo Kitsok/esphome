@@ -1,0 +1,74 @@
+esphome:
+  name: hall_main
+  platform: ESP8266
+  board: esp_wroom_02
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  reboot_timeout: 2min
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "hall main Hotspot"
+
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: !secret api_passwd
+
+ota:
+  password: !secret ota_passwd
+
+web_server:
+  port: 80
+
+status_led:
+  pin: GPIO16
+  
+output:
+  - platform: gpio
+    pin: 4
+    id: relay1
+  - platform: gpio
+    pin: 13
+    id: relay2
+
+light:
+  - platform: binary
+    name: 'light_relay1'
+    id: light_relay1
+    output: relay1
+    restore_mode: ALWAYS_OFF
+  - platform: binary
+    name: 'light_relay2'
+    id: light_relay2
+    output: relay2
+    restore_mode: ALWAYS_OFF
+
+binary_sensor:
+  - platform: gpio
+    pin: 14
+    filters:
+      - invert:
+      - delayed_on: 20ms
+    name: button1
+    id: button1
+    on_release:
+      then:
+        - light.toggle: light_relay1
+  - platform: gpio
+    pin: 12
+    filters:
+      - invert:
+      - delayed_on: 20ms
+    name: button2
+    id: button2
+    on_release:
+      then:
+        - light.toggle: light_relay2

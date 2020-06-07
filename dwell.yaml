@@ -17,7 +17,6 @@ captive_portal:
 
 # Enable logging
 logger:
-  esp8266_store_log_strings_in_flash: false
 
 # Enable Home Assistant API
 api:
@@ -97,6 +96,12 @@ sensor:
   - platform: wifi_signal
     name: "Dwell ESP32 RSSI"
     update_interval: 60s
+
+  - platform: adc
+    pin: A0
+    name: "Water pressure sensor"
+    update_interval: 10s
+    attenuation: 6db
 
 switch:
   - platform: gpio

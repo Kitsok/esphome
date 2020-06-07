@@ -38,7 +38,7 @@ sensor:
   - platform: uptime
     name: Dwell uptime
     id: dwell_uptime
-    update_interval: 10s
+    update_interval: 60s
 
   - platform: template
     name: "Pump on"
@@ -59,6 +59,7 @@ sensor:
       id: dwell_box_temp
     pressure:
       name: "Air Pressure"
+      id: "p_atm"
     update_interval: 60s
 
   - platform: pulse_counter
@@ -100,8 +101,29 @@ sensor:
   - platform: adc
     pin: A0
     name: "Water pressure sensor"
-    update_interval: 10s
+    update_interval: 60s
     attenuation: 6db
+    id: "v_adc"
+
+  - platform: template
+    name: "Water level"
+    update_interval: 60s
+    accuracy_decimals: 1
+    unit_of_measurement: "m"
+    lambda: |-
+        /* Here the magic begins */
+        /* Magic contstants */
+        static float k = 16.05;
+        static float k2 = 3.9;
+        static float p_init = 0.9929;
+        static float p_m = 0.3;
+
+        /* Formula is: */
+        /* Level = k*(Vadc - v_init) - k2*(Vadc - v_init)^2 */
+        /* where v_init = 0.29787 @ 992.9hPa of atmospheric pressure */
+        /* v_init = 0.3 * p_atmospheric */
+        float d_v = id(v_adc).state - (id(p_atm).state * p_m / 1000.0);
+        return (k * d_v) - k2 * d_v * d_v;
 
 switch:
   - platform: gpio

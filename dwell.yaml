@@ -94,6 +94,18 @@ sensor:
     entity_id: input_number.pump_mintemp
     id: pump_mintemp
 
+  - platform: homeassistant
+    entity_id: input_number.level_k
+    id: level_k
+
+  - platform: homeassistant
+    entity_id: input_number.level_k2
+    id: level_k2
+
+  - platform: homeassistant
+    entity_id: input_number.level_p2v
+    id: level_p2v
+
   - platform: wifi_signal
     name: "Dwell ESP32 RSSI"
     update_interval: 60s
@@ -111,19 +123,13 @@ sensor:
     accuracy_decimals: 1
     unit_of_measurement: "m"
     lambda: |-
-        /* Here the magic begins */
-        /* Magic contstants */
-        static float k = 16.05;
-        static float k2 = 3.9;
-        static float p_init = 0.9929;
-        static float p_m = 0.3;
-
         /* Formula is: */
         /* Level = k*(Vadc - v_init) - k2*(Vadc - v_init)^2 */
         /* where v_init = 0.29787 @ 992.9hPa of atmospheric pressure */
-        /* v_init = 0.3 * p_atmospheric */
-        float d_v = id(v_adc).state - (id(p_atm).state * p_m / 1000.0);
-        return (k * d_v) - k2 * d_v * d_v;
+        /* Vinit depends on atmospheric pressure, thus need to take pressure and multiply it: */
+        /* v_init = 0.3 * p_atmospheric / 1000.0 */
+        float d_v = id(v_adc).state - (id(p_atm).state * id(level_p2v).state / 1000.0);
+        return (id(level_k).state * d_v) - id(level_k2).state * d_v * d_v;
 
 switch:
   - platform: gpio

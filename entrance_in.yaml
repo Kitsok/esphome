@@ -34,13 +34,13 @@ status_led:
 output:
   - platform: gpio
     pin: 15
-    id: relay
+    id: relay_entrance_in
 
 light:
   - platform: binary
     name: 'Entrance in switch'
     id: light_switch_relay
-    output: relay
+    output: relay_entrance_in
     restore_mode: ALWAYS_OFF
 
 binary_sensor:

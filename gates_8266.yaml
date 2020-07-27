@@ -49,7 +49,7 @@ switch:
     turn_on_action:
     - if:
         condition:
-          lambda: 'return (id(gates_uptime).state - id(time_opening)) < 40;'
+          lambda: 'return (id(gates_uptime).state - id(time_opening)) < 5;'
         then:
           - logger.log: 'Not toggling, protection interval not passed'
         else:

@@ -1,0 +1,84 @@
+esphome:
+  name: door_8266
+  platform: ESP8266
+  board: nodemcu
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  reboot_timeout: 2min
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Door Fallback Hotspot"
+
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: !secret api_passwd
+
+ota:
+  password: !secret ota_passwd
+
+globals:
+  - id: time_opening
+    type: int
+    initial_value: '0'
+
+switch:
+  - platform: gpio
+    pin: GPIO12
+    id: "led"
+    inverted: yes
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    pin: GPIO5
+    id: "rel"
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: template
+    name: "Door button"
+    icon: "mdi:door"
+    id: "door_button"
+    turn_on_action:
+    - if:
+        condition:
+          lambda: 'return (id(door_uptime).state - id(time_opening)) < 5;'
+        then:
+          - logger.log: 'Not toggling, protection interval not passed'
+        else:
+          - switch.turn_on: rel
+          - switch.turn_on: led
+          - delay: 1000ms
+          - switch.turn_off: rel
+          - switch.turn_off: led
+          - lambda: id(time_opening) = id(door_uptime).state;
+
+sensor:
+  - platform: uptime
+    name: Door uptime
+    id: door_uptime
+    update_interval: 10s
+  - platform: wifi_signal
+    name: "Door RSSI"
+    update_interval: 60s
+  - platform: adc
+    pin: A0
+    name: "Door ADC"
+    update_interval: 10s
+  - platform: dallas
+    address: 0xF8000003D5E95728
+    name: "Door control temperature"
+
+web_server:
+  port: 80
+
+dallas:
+  pin: GPIO13
+

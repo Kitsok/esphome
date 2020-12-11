@@ -1,0 +1,120 @@
+esphome:
+  name: esp32_dwell
+  platform: ESP32
+  board: esp32doit-devkit-v1
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  reboot_timeout: 2min
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esp32 Dwell Fallback Hotspot"
+
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: !secret api_passwd
+
+ota:
+  password: !secret ota_passwd
+
+i2c:
+  sda: 21
+  scl: 22
+  scan: True
+  id: bus_a
+
+web_server:
+  port: 80
+
+sensor:
+  - platform: uptime
+    name: Dwell uptime
+    id: dwell_uptime
+    update_interval: 60s
+
+  - platform: bmp085
+    temperature:
+      name: "Dwell box temperature"
+      id: dwell_box_temp
+    pressure:
+      name: "Air Pressure"
+      id: "p_atm"
+    update_interval: 60s
+
+  - platform: pulse_counter
+    pin:
+      number: 19
+      mode: INPUT_PULLUP
+    id: "water_flow"
+    internal: true
+    update_interval: 60s
+    count_mode:
+      rising_edge: INCREMENT
+      falling_edge: INCREMENT
+
+  - platform: adc
+    pin: A0
+    name: "Water pressure sensor"
+    update_interval: 60s
+    attenuation: 6db
+    id: "v_adc"
+
+switch:
+  - platform: gpio
+    pin: 33
+    id: pump_relay_out_33
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    pin: 32
+    id: d32
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    pin: 27
+    id: d27
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    pin: 23
+    id: d23
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    pin: 19
+    id: d19
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    pin: 18
+    id: d18
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    pin: 17
+    id: d17
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    pin: 16
+    id: d16
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    pin: 04
+    id: d04
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    pin: 02
+    id: wdt_out_02
+    internal: true
+    restore_mode: ALWAYS_OFF

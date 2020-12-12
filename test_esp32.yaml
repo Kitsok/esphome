@@ -17,6 +17,9 @@ captive_portal:
 
 # Enable logging
 logger:
+  level: DEBUG
+  logs:
+    switch: NONE
 
 # Enable Home Assistant API
 api:
@@ -31,7 +34,6 @@ esp32_ble_tracker:
 
 switch:
   - platform: gpio
-    name: "LED"
     pin: 2
     id: "LED_1"
   - platform: gpio
@@ -39,19 +41,17 @@ switch:
     pin: 33
     id: "relay_1"
 
+interval:
+  - interval: 1sec
+    then:
+      - switch.toggle: LED_1
+
 binary_sensor:
   - platform: gpio
     pin: GPIO0
     name: "BUTTON"
     filters:
       - invert:
-    on_click:
-      min_length: 50ms
-      max_length: 350ms
-      then:
-        - switch.turn_on: LED_1
-        - delay: 2s
-        - switch.turn_off: LED_1
 
 web_server:
   port: 80

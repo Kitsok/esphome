@@ -1,5 +1,5 @@
 esphome:
-  name: esp32_dwell
+  name: esp32_dwell_test
   platform: ESP32
   board: esp32doit-devkit-v1
 
@@ -34,6 +34,13 @@ i2c:
 web_server:
   port: 80
 
+binary_sensor:
+  - platform: gpio
+    name: "water_flow"
+    pin:
+      number: 13
+      mode: INPUT_PULLUP
+
 sensor:
   - platform: uptime
     name: Dwell uptime
@@ -49,16 +56,6 @@ sensor:
       id: "p_atm"
     update_interval: 60s
 
-  - platform: pulse_counter
-    pin:
-      number: 19
-      mode: INPUT_PULLUP
-    id: "water_flow"
-    internal: true
-    update_interval: 60s
-    count_mode:
-      rising_edge: INCREMENT
-      falling_edge: INCREMENT
 
   - platform: adc
     pin: A0
@@ -70,51 +67,48 @@ sensor:
 switch:
   - platform: gpio
     pin: 33
-    id: pump_relay_out_33
-    internal: true
+    name: pump_relay_out_33
     restore_mode: ALWAYS_OFF
   - platform: gpio
     pin: 32
-    id: d32
-    internal: true
+    name: d32
     restore_mode: ALWAYS_OFF
   - platform: gpio
     pin: 27
-    id: d27
-    internal: true
+    name: d27
     restore_mode: ALWAYS_OFF
   - platform: gpio
     pin: 23
-    id: d23
-    internal: true
+    name: d23
     restore_mode: ALWAYS_OFF
   - platform: gpio
     pin: 19
-    id: d19
-    internal: true
+    name: d19
     restore_mode: ALWAYS_OFF
   - platform: gpio
     pin: 18
-    id: d18
-    internal: true
+    name: d18
     restore_mode: ALWAYS_OFF
   - platform: gpio
     pin: 17
-    id: d17
-    internal: true
+    name: d17
     restore_mode: ALWAYS_OFF
   - platform: gpio
     pin: 16
-    id: d16
-    internal: true
+    name: d16
     restore_mode: ALWAYS_OFF
   - platform: gpio
     pin: 04
-    id: d04
-    internal: true
+    name: d04
     restore_mode: ALWAYS_OFF
   - platform: gpio
     pin: 02
+    name: wdt_out_02
     id: wdt_out_02
-    internal: true
     restore_mode: ALWAYS_OFF
+
+interval:
+  - interval: 1sec
+    then:
+      - switch.toggle: wdt_out_02
+

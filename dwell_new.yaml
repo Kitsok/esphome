@@ -1,0 +1,244 @@
+esphome:
+  name: esp32_dwell
+  platform: ESP32
+  board: esp32doit-devkit-v1
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  reboot_timeout: 2min
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esp32 Dwell Fallback Hotspot"
+
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: !secret api_passwd
+
+ota:
+  password: !secret ota_passwd
+
+i2c:
+  sda: 21
+  scl: 22
+  scan: True
+  id: bus_a
+
+web_server:
+  port: 80
+
+sensor:
+  - platform: uptime
+    name: Dwell uptime
+    id: dwell_uptime
+    update_interval: 60s
+
+  - platform: template
+    name: "Pump on"
+    accuracy_decimals: 0
+    lambda: |-
+      return id(pump_on_time) != 0;
+    update_interval: 10s
+
+  - platform: template
+    id: dwell_total_counter
+    name: "Total water"
+    unit_of_measurement: "L"
+    accuracy_decimals: 0
+
+  - platform: bmp085
+    temperature:
+      name: "Dwell box temperature"
+      id: dwell_box_temp
+    pressure:
+      name: "Air Pressure"
+      id: "p_atm"
+    update_interval: 60s
+
+  - platform: pulse_counter
+    pin:
+      number: 13
+      mode: INPUT_PULLUP
+    id: "water_flow"
+    update_interval: 60s
+    count_mode:
+      rising_edge: INCREMENT
+      falling_edge: INCREMENT
+    filters:
+      - lambda: |-
+          static float total_pulses = 0.0;
+          total_pulses += x * 1;
+          id(dwell_total_counter).publish_state(total_pulses * 5);
+          return x;
+
+  - platform: homeassistant
+    name: "Pump period"
+    entity_id: input_number.pump_period
+    id: pump_period
+
+  - platform: homeassistant
+    name: "Pump duration"
+    entity_id: input_number.pump_duration
+    id: pump_duration
+
+  - platform: homeassistant
+    name: "Safe temperature to start pump"
+    entity_id: input_number.pump_mintemp
+    id: pump_mintemp
+
+  - platform: homeassistant
+    entity_id: input_number.level_k
+    id: level_k
+
+  - platform: homeassistant
+    entity_id: input_number.level_k2
+    id: level_k2
+
+  - platform: homeassistant
+    entity_id: input_number.level_p2v
+    id: level_p2v
+
+  - platform: wifi_signal
+    name: "Dwell ESP32 RSSI"
+    update_interval: 60s
+
+  - platform: adc
+    pin: A0
+    name: "Water pressure sensor"
+    update_interval: 60s
+    attenuation: 6db
+    id: "v_adc"
+
+  - platform: template
+    name: "Water level"
+    update_interval: 60s
+    accuracy_decimals: 1
+    unit_of_measurement: "m"
+    lambda: |-
+        /* Formula is: */
+        /* Level = k*(Vadc - v_init) - k2*(Vadc - v_init)^2 */
+        /* where v_init = 0.29787 @ 992.9hPa of atmospheric pressure */
+        /* Vinit depends on atmospheric pressure, thus need to take pressure and multiply it: */
+        /* v_init = 0.3 * p_atmospheric / 1000.0 */
+        float d_v = id(v_adc).state - (id(p_atm).state * id(level_p2v).state / 1000.0);
+        return (id(level_k).state * d_v) - id(level_k2).state * d_v * d_v;
+
+switch:
+  - platform: gpio
+    pin: 33
+    id: pump_relay_out_33
+    name: "Pump relay"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    pin: 02
+    id: wdt_out_02
+    internal: true
+    restore_mode: ALWAYS_OFF
+
+  - platform: restart
+    name: "restart button"
+    id: restart_switch
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+globals:
+  - id: time_spent
+    type: int
+    initial_value: '0'
+
+  - id: pump_on_time
+    type: int
+    initial_value: '0'
+
+  - id: last_earned
+    type: int
+    initial_value: '0'
+
+interval:
+  - interval: 1sec
+    then:
+      - switch.toggle: wdt_out_02
+
+  - interval: 60s
+    then:
+      - logger.log:
+          format: "Check time spent. Period %d minutes spent %d motor on %d"
+          args: ['int(id(pump_period).state)', 'int(id(time_spent))', 'int(id(pump_on_time))']
+      - if:
+          condition:
+            lambda: 'return id(time_spent) < 0;'
+          then:
+            - logger.log:
+                format: "Setting initial state of time_spent to 0"
+            - lambda: id(time_spent) = 0;
+      - lambda: id(time_spent) += 1;
+
+      # Start motor if it's time
+      - if:
+          condition:
+            lambda: 'return id(time_spent) >= id(pump_period).state;'
+          then:
+             - if:
+                 condition:
+                   lambda: 'return id(pump_on_time) == 0;'
+                 then:
+                   - logger.log: "Motor on"
+                   - lambda: id(pump_on_time) += 1;
+                   - script.execute: turn_pump_on
+                 else:
+                   - lambda: id(pump_on_time) += 1;
+
+      # Dry run protection
+      - if:
+          condition:
+            lambda: 'return id(pump_on_time) > 2;'
+          then:
+             - logger.log:
+                 format: "Last earned: %d current earned: %d"
+                 args: ['int(id(dwell_total_counter).state)', 'int(id(last_earned))']
+             - if:
+                 condition:
+                    lambda: 'return (id(dwell_total_counter).state - id(last_earned) > 0);'
+                 then:
+                    - logger.log: "Positive earn, continuing pumping"
+                    - lambda: id(last_earned) = id(dwell_total_counter).state;
+                 else:
+                    - logger.log: "No result, time to stop pump"
+                    - script.execute: turn_pump_off
+
+      # Turn off motor by maximum run time
+      - if:
+          condition:
+            lambda: 'return id(pump_on_time) > id(pump_duration).state;'
+          then:
+             - logger.log: "Motor off"
+             - script.execute: turn_pump_off
+
+script:
+   - id: turn_pump_on
+     then:
+        - if:
+            condition:
+              lambda: 'return (id(dwell_box_temp).state >= id(pump_mintemp).state);'
+            then:
+               - switch.turn_on: pump_relay_out_33
+            else:
+               - logger.log: "Temperature is too low, not starting pump"
+               - lambda: id(pump_on_time) = 0;
+               - lambda: id(time_spent) = 1;
+
+   - id: turn_pump_off
+     then:
+        - delay: 15s
+        - switch.turn_off: pump_relay_out_33
+        - switch.turn_on: restart_switch

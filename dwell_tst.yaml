@@ -56,7 +56,6 @@ sensor:
       id: "p_atm"
     update_interval: 60s
 
-
   - platform: adc
     pin: A0
     name: "Water pressure sensor"
